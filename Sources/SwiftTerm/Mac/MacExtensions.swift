@@ -11,12 +11,15 @@ import AppKit
 
 // Alice fork patch (larsenvisuals/SwiftTerm, branch alice-srgb-fix):
 // the Mac color path built every terminal color with the *device* RGB
-// color space (NSColor deviceRed:/.deviceRGB). The xterm 256-color palette
-// values are authored as sRGB, so drawing them as untagged device RGB on a
-// color-managed / wide-gamut Mac display desaturates them ("hazy" terminal,
-// most visible on the pastel 256-cube colors a TUI like claude emits). All
-// conversions below are switched to sRGB so on-screen colors match the
-// authored values (and match xterm.js, which is sRGB color-managed).
+// color space (NSColor deviceRed:). On a wide-gamut (Display P3) Mac the
+// xterm 16/256 palette rendered visibly desaturated vs a bare Terminal /
+// the iOS xterm.js terminal — reds/yellows/greens looked "washed out"
+// (operator-confirmed via A/B screenshots: cube 211 salmon rendered ~#c194a0
+// instead of vivid #ff87b1). Treating the palette's 0–255 channel values as
+// *Display P3* coordinates (NSColor displayP3Red:) renders them across the
+// full wide gamut so saturated colors pop on the P3 panel, matching the
+// punchy look. Color *creation* uses P3; the read helpers (getTerminalColor
+// etc.) stay sRGB since they ingest sRGB-authored NSColors from the app.
 extension NSColor {
     func getTerminalColor () -> Color {
         guard let color = self.usingColorSpace(.sRGB) else {
@@ -34,7 +37,7 @@ extension NSColor {
 
         var red: CGFloat = 0.0, green: CGFloat = 0.0, blue: CGFloat = 0.0, alpha: CGFloat = 1.0
         color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        return NSColor(srgbRed: 1.0 - red, green: 1.0 - green, blue: 1.0 - blue, alpha: alpha)
+        return NSColor(displayP3Red: 1.0 - red, green: 1.0 - green, blue: 1.0 - blue, alpha: alpha)
     }
 
     /// Returns a dimmed version of the color (SGR 2 faint/dim attribute) by
@@ -49,7 +52,7 @@ extension NSColor {
         fg.getRed(&fRed, green: &fGreen, blue: &fBlue, alpha: &fAlpha)
         var bRed: CGFloat = 0.0, bGreen: CGFloat = 0.0, bBlue: CGFloat = 0.0, bAlpha: CGFloat = 1.0
         bg.getRed(&bRed, green: &bGreen, blue: &bBlue, alpha: &bAlpha)
-        return NSColor (srgbRed: (fRed + bRed) * 0.5,
+        return NSColor (displayP3Red: (fRed + bRed) * 0.5,
                         green: (fGreen + bGreen) * 0.5,
                         blue: (fBlue + bBlue) * 0.5,
                         alpha: fAlpha)
@@ -57,7 +60,7 @@ extension NSColor {
 
     static func make (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -> NSColor
     {
-        return NSColor (srgbRed: red, green: green, blue: blue, alpha: alpha)
+        return NSColor (displayP3Red: red, green: green, blue: blue, alpha: alpha)
     }
     
     static func make (hue: CGFloat, saturation: CGFloat, brightness: CGFloat, alpha: CGFloat) -> TTColor
@@ -71,7 +74,7 @@ extension NSColor {
 
     static func make (color: Color) -> NSColor
     {
-        return NSColor (srgbRed: CGFloat (color.red) / 65535.0,
+        return NSColor (displayP3Red: CGFloat (color.red) / 65535.0,
                         green: CGFloat (color.green) / 65535.0,
                         blue: CGFloat (color.blue) / 65535.0,
                         alpha: 1.0)
