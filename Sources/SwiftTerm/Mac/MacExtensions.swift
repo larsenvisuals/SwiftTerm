@@ -9,9 +9,17 @@
 import Foundation
 import AppKit
 
+// Alice fork patch (larsenvisuals/SwiftTerm, branch alice-srgb-fix):
+// the Mac color path built every terminal color with the *device* RGB
+// color space (NSColor deviceRed:/.deviceRGB). The xterm 256-color palette
+// values are authored as sRGB, so drawing them as untagged device RGB on a
+// color-managed / wide-gamut Mac display desaturates them ("hazy" terminal,
+// most visible on the pastel 256-cube colors a TUI like claude emits). All
+// conversions below are switched to sRGB so on-screen colors match the
+// authored values (and match xterm.js, which is sRGB color-managed).
 extension NSColor {
     func getTerminalColor () -> Color {
-        guard let color = self.usingColorSpace(.deviceRGB) else {
+        guard let color = self.usingColorSpace(.sRGB) else {
             return Color.defaultForeground
         }
         
@@ -20,28 +28,28 @@ extension NSColor {
         return Color(red: UInt16(red*65535), green: UInt16(green*65535), blue: UInt16(blue*65535))
     }
     func inverseColor() -> NSColor {
-        guard let color = self.usingColorSpace(.deviceRGB) else {
+        guard let color = self.usingColorSpace(.sRGB) else {
             return self
         }
 
         var red: CGFloat = 0.0, green: CGFloat = 0.0, blue: CGFloat = 0.0, alpha: CGFloat = 1.0
         color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        return NSColor(calibratedRed: 1.0 - red, green: 1.0 - green, blue: 1.0 - blue, alpha: alpha)
+        return NSColor(srgbRed: 1.0 - red, green: 1.0 - green, blue: 1.0 - blue, alpha: alpha)
     }
 
     /// Returns a dimmed version of the color (SGR 2 faint/dim attribute) by
     /// blending 50 % toward `background`. The result is fully opaque so that
     /// adjacent box-drawing characters tile without visible seams.
     func dimmedColor (towards background: NSColor) -> NSColor {
-        guard let fg = self.usingColorSpace(.deviceRGB),
-              let bg = background.usingColorSpace(.deviceRGB) else {
+        guard let fg = self.usingColorSpace(.sRGB),
+              let bg = background.usingColorSpace(.sRGB) else {
             return self
         }
         var fRed: CGFloat = 0.0, fGreen: CGFloat = 0.0, fBlue: CGFloat = 0.0, fAlpha: CGFloat = 1.0
         fg.getRed(&fRed, green: &fGreen, blue: &fBlue, alpha: &fAlpha)
         var bRed: CGFloat = 0.0, bGreen: CGFloat = 0.0, bBlue: CGFloat = 0.0, bAlpha: CGFloat = 1.0
         bg.getRed(&bRed, green: &bGreen, blue: &bBlue, alpha: &bAlpha)
-        return NSColor (deviceRed: (fRed + bRed) * 0.5,
+        return NSColor (srgbRed: (fRed + bRed) * 0.5,
                         green: (fGreen + bGreen) * 0.5,
                         blue: (fBlue + bBlue) * 0.5,
                         alpha: fAlpha)
@@ -49,7 +57,7 @@ extension NSColor {
 
     static func make (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -> NSColor
     {
-        return NSColor (deviceRed: red, green: green, blue: blue, alpha: alpha)
+        return NSColor (srgbRed: red, green: green, blue: blue, alpha: alpha)
     }
     
     static func make (hue: CGFloat, saturation: CGFloat, brightness: CGFloat, alpha: CGFloat) -> TTColor
@@ -63,7 +71,7 @@ extension NSColor {
 
     static func make (color: Color) -> NSColor
     {
-        return NSColor (deviceRed: CGFloat (color.red) / 65535.0,
+        return NSColor (srgbRed: CGFloat (color.red) / 65535.0,
                         green: CGFloat (color.green) / 65535.0,
                         blue: CGFloat (color.blue) / 65535.0,
                         alpha: 1.0)
